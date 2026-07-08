@@ -37,8 +37,12 @@ def show_network_interfaces():
     print("------------------")
 
     for interface in interfaces:
-        print(f"- {interface['name']} ({interface['addresses_count']} addresses)")
-
+        print(f"\nInterface: {interface['name']}")
+        print(f"  IPv4: {interface['ipv4'] or 'N/A'}")
+        print(f"  IPv6: {interface['ipv6'] or 'N/A'}")
+        print(f"  MAC:  {interface['mac'] or 'N/A'}")
+        print(f"  Addresses: {interface['addresses_count']}")
+        
 def show_python_info():
     info = get_python_info()
 
