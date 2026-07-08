@@ -1,3 +1,4 @@
+from core.network import get_basic_network_info
 from core.system import get_project_status, get_python_info
 
 
@@ -12,7 +13,8 @@ def print_menu():
     print()
     print("1) Show project status")
     print("2) Show Python/system info")
-    print("3) Exit")
+    print("3) Show basic network info")
+    print("4) Exit")
     print()
 
 
@@ -38,6 +40,13 @@ def show_python_info():
     print(f"Platform release: {info['platform_release']}")
     print(f"Machine:          {info['machine']}")
 
+def show_basic_network_info():
+    info = get_basic_network_info()
+
+    print()
+    print("Basic network info")
+    print("------------------")
+    print(f"Hostname: {info['hostname']}")
 
 def run_menu():
     while True:
@@ -51,11 +60,13 @@ def run_menu():
         elif option == "2":
             show_python_info()
         elif option == "3":
+            show_basic_network_info()
+        elif option == "4":
             print()
             print("Exiting Evil Twin Lab. Bye!")
             break
         else:
             print()
-            print("Invalid option. Please choose 1, 2 or 3.")
+            print("Invalid option. Please choose 1, 2, 3 or 4.")
 
         input("\nPress Enter to continue...")
