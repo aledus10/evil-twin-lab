@@ -1,6 +1,8 @@
+from cli.menu import run_menu
+
+
 def main():
-    print("Evil Twin Lab")
-    print("Project initialized successfully.")
+    run_menu()
 
 
 if __name__ == "__main__":
