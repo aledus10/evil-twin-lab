@@ -30,6 +30,7 @@ def print_menu():
     print("9) Exit")
     print()
 
+
 def print_step_results(results):
     for result in results:
         print()
