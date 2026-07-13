@@ -8,6 +8,7 @@ from core.wifi_lab import (
     set_managed_mode,
     set_monitor_mode,
 )
+from core.wifi_inventory import get_wireless_inventory
 
 def print_header():
     print()
@@ -24,8 +25,9 @@ def print_menu():
     print("4) Show network interfaces")
     print("5) Show Linux WiFi commands")
     print("6) Show wireless interfaces")
-    print("7) WiFi lab controls")
-    print("8) Exit")
+    print("7) Show wireless inventory")
+    print("8) WiFi lab controls")
+    print("9) Exit")
     print()
 
 def print_step_results(results):
@@ -42,12 +44,41 @@ def print_step_results(results):
             print(result["stderr"])
 
 
+def show_wireless_inventory():
+    result = get_wireless_inventory()
+
+    print()
+    print("Wireless inventory")
+    print("------------------")
+
+    if not result["success"]:
+        print("Could not build wireless inventory.")
+        print(f"Error: {result['error']}")
+        return
+
+    if not result["interfaces"]:
+        print("No wireless interfaces detected.")
+        return
+
+    for interface in result["interfaces"]:
+        print(f"\nInterface: {interface['name']}")
+        print(f"  PHY:       {interface['phy'] or 'N/A'}")
+        print(f"  Type:      {interface['type'] or 'N/A'}")
+        print(f"  SSID:      {interface['ssid'] or 'N/A'}")
+        print(f"  Driver:    {interface['driver'] or 'N/A'}")
+        print(f"  Bus:       {interface['bus'] or 'N/A'}")
+        print(f"  Vendor:    {interface['vendor'] or 'N/A'}")
+        print(f"  Model:     {interface['model'] or 'N/A'}")
+        print(f"  USB:       {'yes' if interface['is_usb'] else 'no'}")
+        print(f"  Role:      {interface['role_hint']}")
+
+
 def choose_wireless_interface():
-    result = get_wireless_interface_names()
+    result = get_wireless_inventory()
 
     if not result["success"]:
         print()
-        print("Could not read wireless interfaces.")
+        print("Could not read wireless inventory.")
         print(f"Error: {result['error']}")
         return None
 
@@ -62,8 +93,18 @@ def choose_wireless_interface():
     print("Available wireless interfaces")
     print("-----------------------------")
 
-    for index, interface_name in enumerate(interfaces, start=1):
-        print(f"{index}) {interface_name}")
+    for index, interface in enumerate(interfaces, start=1):
+        name = interface["name"]
+        driver = interface["driver"] or "unknown-driver"
+        bus = interface["bus"] or "unknown-bus"
+        model = interface["model"] or "unknown-model"
+        role = interface["role_hint"]
+
+        print(f"{index}) {name}")
+        print(f"   Driver: {driver}")
+        print(f"   Bus:    {bus}")
+        print(f"   Model:  {model}")
+        print(f"   Role:   {role}")
 
     selected = input("\nSelect interface: ").strip()
 
@@ -77,7 +118,7 @@ def choose_wireless_interface():
         print("Invalid selection.")
         return None
 
-    return interfaces[selected_index - 1]
+    return interfaces[selected_index - 1]["name"]
 
 
 def show_wifi_lab_menu():
@@ -263,13 +304,15 @@ def run_menu():
         elif option == "6":
             show_wireless_interfaces()
         elif option == "7":
-            show_wifi_lab_menu()
+            show_wireless_inventory()
         elif option == "8":
+            show_wifi_lab_menu()
+        elif option == "9":
             print()
             print("Exiting Evil Twin Lab. Bye!")
             break
         else:
             print()
-            print("Invalid option. Please choose 1, 2, 3, 4, 5, 6, 7 or 8.")
+            print("Invalid option. Please choose 1, 2, 3, 4, 5, 6, 7, 8 or 9.")
 
-    input("\nPress Enter to continue...")
+        input("\nPress Enter to continue...")
