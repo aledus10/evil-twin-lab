@@ -37,10 +37,19 @@ def show_network_interfaces():
     print("------------------")
 
     for interface in interfaces:
+        status = "up" if interface["is_up"] else "down"
+        interface_type = (
+            "wireless candidate"
+            if interface["is_wireless_candidate"]
+            else "generic network interface"
+        )
+
         print(f"\nInterface: {interface['name']}")
-        print(f"  IPv4: {interface['ipv4'] or 'N/A'}")
-        print(f"  IPv6: {interface['ipv6'] or 'N/A'}")
-        print(f"  MAC:  {interface['mac'] or 'N/A'}")
+        print(f"  IPv4:      {interface['ipv4'] or 'N/A'}")
+        print(f"  IPv6:      {interface['ipv6'] or 'N/A'}")
+        print(f"  MAC:       {interface['mac'] or 'N/A'}")
+        print(f"  Status:    {status}")
+        print(f"  Type:      {interface_type}")
         print(f"  Addresses: {interface['addresses_count']}")
         
 def show_python_info():
