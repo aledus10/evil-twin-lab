@@ -1,6 +1,6 @@
 from core.network import get_basic_network_info, get_network_interfaces
 from core.system import get_project_status, get_python_info
-
+from core.linux_commands import get_ip_link_output, get_iw_dev_output, get_lsusb_output
 
 def print_header():
     print()
@@ -15,7 +15,8 @@ def print_menu():
     print("2) Show Python/system info")
     print("3) Show basic network info")
     print("4) Show network interfaces")
-    print("5) Exit")
+    print("5) Show Linux WiFi commands")
+    print("6) Exit")
     print()
 
 
@@ -71,6 +72,30 @@ def show_basic_network_info():
     print("------------------")
     print(f"Hostname: {info['hostname']}")
 
+
+def print_command_result(title, result):
+    print()
+    print(title)
+    print("-" * len(title))
+    print(f"Command: {' '.join(result['command'])}")
+    print(f"Return code: {result['return_code']}")
+
+    if result["stdout"]:
+        print()
+        print(result["stdout"])
+
+    if result["stderr"]:
+        print()
+        print("Errors:")
+        print(result["stderr"])
+
+
+def show_linux_wifi_commands():
+    print_command_result("ip link", get_ip_link_output())
+    print_command_result("iw dev", get_iw_dev_output())
+    print_command_result("lsusb", get_lsusb_output())
+
+
 def run_menu():
     while True:
         print_header()
@@ -87,11 +112,13 @@ def run_menu():
         elif option == "4":
             show_network_interfaces()
         elif option == "5":
+            show_linux_wifi_commands()
+        elif option == "6":
             print()
             print("Exiting Evil Twin Lab. Bye!")
             break
         else:
             print()
-            print("Invalid option. Please choose 1, 2, 3, 4 or 5.")
+            print("Invalid option. Please choose 1, 2, 3, 4, 5 or 6.")
 
         input("\nPress Enter to continue...")
