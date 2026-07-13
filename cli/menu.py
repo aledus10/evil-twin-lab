@@ -2,6 +2,12 @@ from core.network import get_basic_network_info, get_network_interfaces
 from core.system import get_project_status, get_python_info
 from core.linux_commands import get_ip_link_output, get_iw_dev_output, get_lsusb_output
 from core.wifi import get_wireless_interfaces
+from core.wifi_lab import (
+    get_wireless_interface_names,
+    scan_wifi_networks,
+    set_managed_mode,
+    set_monitor_mode,
+)
 
 def print_header():
     print()
@@ -18,8 +24,122 @@ def print_menu():
     print("4) Show network interfaces")
     print("5) Show Linux WiFi commands")
     print("6) Show wireless interfaces")
-    print("7) Exit")
+    print("7) WiFi lab controls")
+    print("8) Exit")
     print()
+
+def print_step_results(results):
+    for result in results:
+        print()
+        print(f"Command: {' '.join(result['command'])}")
+        print(f"Return code: {result['return_code']}")
+
+        if result["stdout"]:
+            print(result["stdout"])
+
+        if result["stderr"]:
+            print("Errors:")
+            print(result["stderr"])
+
+
+def choose_wireless_interface():
+    result = get_wireless_interface_names()
+
+    if not result["success"]:
+        print()
+        print("Could not read wireless interfaces.")
+        print(f"Error: {result['error']}")
+        return None
+
+    interfaces = result["interfaces"]
+
+    if not interfaces:
+        print()
+        print("No wireless interfaces detected.")
+        return None
+
+    print()
+    print("Available wireless interfaces")
+    print("-----------------------------")
+
+    for index, interface_name in enumerate(interfaces, start=1):
+        print(f"{index}) {interface_name}")
+
+    selected = input("\nSelect interface: ").strip()
+
+    if not selected.isdigit():
+        print("Invalid selection.")
+        return None
+
+    selected_index = int(selected)
+
+    if selected_index < 1 or selected_index > len(interfaces):
+        print("Invalid selection.")
+        return None
+
+    return interfaces[selected_index - 1]
+
+
+def show_wifi_lab_menu():
+    while True:
+        print()
+        print("===================================")
+        print("        WiFi Lab Controls")
+        print("===================================")
+        print()
+        print("1) Show wireless interfaces")
+        print("2) Scan nearby WiFi networks")
+        print("3) Enable monitor mode")
+        print("4) Restore managed mode")
+        print("5) Back")
+        print()
+
+        option = input("Select an option: ").strip()
+
+        if option == "1":
+            show_wireless_interfaces()
+
+        elif option == "2":
+            interface_name = choose_wireless_interface()
+
+            if interface_name:
+                print()
+                print(f"Scanning nearby WiFi networks using {interface_name}...")
+                result = scan_wifi_networks(interface_name)
+                print_command_result("WiFi scan", result)
+
+        elif option == "3":
+            interface_name = choose_wireless_interface()
+
+            if interface_name == "wlan0":
+                print()
+                print("Refusing to change wlan0 because it may be your SSH connection.")
+                print("Use the external adapter, usually wlan1.")
+                continue
+
+            if interface_name:
+                print()
+                print(f"Enabling monitor mode on {interface_name}...")
+                results = set_monitor_mode(interface_name)
+                print_step_results(results)
+
+        elif option == "4":
+            interface_name = choose_wireless_interface()
+
+            if interface_name:
+                print()
+                print(f"Restoring managed mode on {interface_name}...")
+                results = set_managed_mode(interface_name)
+                print_step_results(results)
+
+        elif option == "5":
+            break
+
+        else:
+            print()
+            print("Invalid option. Please choose 1, 2, 3, 4 or 5.")
+
+        input("\nPress Enter to continue...")
 
 
 def show_wireless_interfaces():
@@ -143,11 +263,13 @@ def run_menu():
         elif option == "6":
             show_wireless_interfaces()
         elif option == "7":
+            show_wifi_lab_menu()
+        elif option == "8":
             print()
             print("Exiting Evil Twin Lab. Bye!")
             break
         else:
             print()
-            print("Invalid option. Please choose 1, 2, 3, 4, 5, 6 or 7.")
+            print("Invalid option. Please choose 1, 2, 3, 4, 5, 6, 7 or 8.")
 
-        input("\nPress Enter to continue...")
+    input("\nPress Enter to continue...")
