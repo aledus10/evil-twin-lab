@@ -1,6 +1,7 @@
 from core.network import get_basic_network_info, get_network_interfaces
 from core.system import get_project_status, get_python_info
 from core.linux_commands import get_ip_link_output, get_iw_dev_output, get_lsusb_output
+from core.wifi import get_wireless_interfaces
 
 def print_header():
     print()
@@ -16,8 +17,34 @@ def print_menu():
     print("3) Show basic network info")
     print("4) Show network interfaces")
     print("5) Show Linux WiFi commands")
-    print("6) Exit")
+    print("6) Show wireless interfaces")
+    print("7) Exit")
     print()
+
+
+def show_wireless_interfaces():
+    result = get_wireless_interfaces()
+
+    print()
+    print("Wireless interfaces")
+    print("-------------------")
+
+    if not result["success"]:
+        print("Could not read wireless interfaces.")
+        print(f"Error: {result['error']}")
+        return
+
+    if not result["interfaces"]:
+        print("No wireless interfaces detected.")
+        return
+
+    for interface in result["interfaces"]:
+        print(f"\nInterface: {interface['name']}")
+        print(f"  PHY:      {interface['phy'] or 'N/A'}")
+        print(f"  Type:     {interface['type'] or 'N/A'}")
+        print(f"  SSID:     {interface['ssid'] or 'N/A'}")
+        print(f"  Channel:  {interface['channel'] or 'N/A'}")
+        print(f"  TxPower:  {interface['txpower'] or 'N/A'}")
 
 
 def show_project_status():
@@ -116,9 +143,14 @@ def run_menu():
         elif option == "6":
             print()
             print("Exiting Evil Twin Lab. Bye!")
+        elif option == "7":
+            show_wireless_interfaces()
+        elif option == "8":
+            print()
+            print("Exiting Evil Twin Lab. Bye!")
             break
         else:
             print()
-            print("Invalid option. Please choose 1, 2, 3, 4, 5 or 6.")
+            print("Invalid option. Please choose 1, 2, 3, 4, 5, 6 or 7.")
 
         input("\nPress Enter to continue...")
