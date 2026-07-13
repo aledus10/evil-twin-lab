@@ -2,12 +2,20 @@ import subprocess
 
 
 def run_command(command):
-    completed_process = subprocess.run(
-        command,
-        capture_output=True,
-        text=True,
-        check=False,
-    )
+    try:
+        completed_process = subprocess.run(
+            command,
+            capture_output=True,
+            text=True,
+            check=False,
+        )
+    except FileNotFoundError:
+        return {
+            "command": command,
+            "return_code": 127,
+            "stdout": "",
+            "stderr": f"Command not found: {command[0]}",
+        }
 
     return {
         "command": command,

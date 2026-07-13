@@ -141,11 +141,8 @@ def run_menu():
         elif option == "5":
             show_linux_wifi_commands()
         elif option == "6":
-            print()
-            print("Exiting Evil Twin Lab. Bye!")
-        elif option == "7":
             show_wireless_interfaces()
-        elif option == "8":
+        elif option == "7":
             print()
             print("Exiting Evil Twin Lab. Bye!")
             break

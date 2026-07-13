@@ -10,6 +10,9 @@ def parse_iw_dev_output(output):
         line = raw_line.strip()
 
         if line.startswith("phy#"):
+            if current_interface:
+                wireless_interfaces.append(current_interface)
+                current_interface = None
             current_phy = line
 
         elif line.startswith("Interface "):
@@ -26,6 +29,11 @@ def parse_iw_dev_output(output):
                 "channel": None,
                 "txpower": None,
             }
+
+        elif line.startswith("Unnamed/non-netdev interface"):
+            if current_interface:
+                wireless_interfaces.append(current_interface)
+                current_interface = None
 
         elif current_interface:
             if line.startswith("type "):
