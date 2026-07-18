@@ -3,6 +3,10 @@
 import re
 
 from core.linux_commands import run_command
+from core.logger import get_logger
+
+
+logger = get_logger(__name__)
 
 
 BSS_PATTERN = re.compile(
@@ -155,8 +159,22 @@ def parse_iw_scan_output(output):
 
 def scan_wifi_networks(interface_name):
     """Run an ``iw`` scan and attach parsed networks to the command result."""
+    logger.info("Starting WiFi scan on %s", interface_name)
     result = run_command(["sudo", "iw", "dev", interface_name, "scan"])
     result["networks"] = (
         parse_iw_scan_output(result["stdout"]) if result["return_code"] == 0 else []
     )
+
+    if result["return_code"] != 0:
+        logger.error(
+            "WiFi scan failed on %s with return code %d: %s",
+            interface_name,
+            result["return_code"],
+            result["stderr"],
+        )
+    elif result["networks"]:
+        logger.success("Found %d WiFi networks on %s", len(result["networks"]), interface_name)
+    else:
+        logger.warning("No WiFi networks found on %s", interface_name)
+
     return result

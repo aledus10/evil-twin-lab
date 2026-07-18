@@ -7,7 +7,6 @@ from rich.text import Text
 from core.linux_commands import get_ip_link_output, get_iw_dev_output, get_lsusb_output
 from core.network import get_basic_network_info, get_network_interfaces
 from core.system import get_project_status, get_python_info
-from core.wifi import get_wireless_interfaces
 from core.wifi_inventory import get_wireless_inventory
 from core.wifi_scan import scan_wifi_networks
 from core.wifi_lab import (
@@ -96,7 +95,6 @@ def print_menu():
         "Show basic network info",
         "Show network interfaces",
         "Show Linux WiFi commands",
-        "Show wireless interfaces",
         "Show wireless inventory",
         "WiFi lab controls",
         "Exit",
@@ -313,32 +311,6 @@ def show_linux_wifi_commands():
     print_command_result("lsusb", get_lsusb_output())
 
 
-def show_wireless_interfaces():
-    result = get_wireless_interfaces()
-
-    print()
-    print_section("Wireless interfaces")
-    print_section("-------------------")
-
-    if not result["success"]:
-        print_error("Could not read wireless interfaces.")
-        print_error(f"Error: {result['error']}")
-        return
-
-    if not result["interfaces"]:
-        print_warning("No wireless interfaces detected.")
-        return
-
-    for interface in result["interfaces"]:
-        print()
-        print_label_value("Interface: ", interface["name"], INTERFACE_NAME)
-        print_unknown_label_value("  PHY:      ", interface["phy"])
-        print_unknown_label_value("  Type:     ", interface["type"])
-        print_unknown_label_value("  SSID:     ", interface["ssid"])
-        print_unknown_label_value("  Channel:  ", interface["channel"])
-        print_unknown_label_value("  TxPower:  ", interface["txpower"])
-
-
 def show_wireless_inventory():
     result = get_wireless_inventory()
 
@@ -361,6 +333,8 @@ def show_wireless_inventory():
         print_unknown_label_value("  PHY:       ", interface["phy"])
         print_unknown_label_value("  Type:      ", interface["type"])
         print_unknown_label_value("  SSID:      ", interface["ssid"])
+        print_unknown_label_value("  Channel:   ", interface["channel"])
+        print_unknown_label_value("  TxPower:   ", interface["txpower"])
         print_unknown_label_value("  Driver:    ", interface["driver"])
         print_unknown_label_value("  Bus:       ", interface["bus"])
         print_unknown_label_value("  Vendor:    ", interface["vendor"])
@@ -437,7 +411,6 @@ def show_wifi_lab_menu():
         print_options_table(
             "Lab Actions",
             (
-                "Show wireless interfaces",
                 "Scan nearby WiFi networks",
                 "Enable monitor mode",
                 "Restore managed mode",
@@ -448,9 +421,6 @@ def show_wifi_lab_menu():
         option = input("Select an option: ").strip()
 
         if option == "1":
-            show_wireless_interfaces()
-
-        elif option == "2":
             interface_name = choose_wireless_interface()
 
             if interface_name:
@@ -459,7 +429,7 @@ def show_wifi_lab_menu():
                 result = scan_wifi_networks(interface_name)
                 print_wifi_scan_results(result)
 
-        elif option == "3":
+        elif option == "2":
             interface_name = choose_wireless_interface()
 
             if interface_name == "wlan0":
@@ -474,7 +444,7 @@ def show_wifi_lab_menu():
                 results = set_monitor_mode(interface_name)
                 print_step_results(results)
 
-        elif option == "4":
+        elif option == "3":
             interface_name = choose_wireless_interface()
 
             if interface_name:
@@ -483,12 +453,12 @@ def show_wifi_lab_menu():
                 results = set_managed_mode(interface_name)
                 print_step_results(results)
 
-        elif option == "5":
+        elif option == "4":
             break
 
         else:
             print()
-            print_warning("Invalid option. Please choose 1, 2, 3, 4 or 5.")
+            print_warning("Invalid option. Please choose 1, 2, 3 or 4.")
 
         input("\nPress Enter to continue...")
 
@@ -511,17 +481,15 @@ def run_menu():
         elif option == "5":
             show_linux_wifi_commands()
         elif option == "6":
-            show_wireless_interfaces()
-        elif option == "7":
             show_wireless_inventory()
-        elif option == "8":
+        elif option == "7":
             show_wifi_lab_menu()
-        elif option == "9":
+        elif option == "8":
             print()
             print_success("Exiting Evil Twin Lab. Bye!")
             break
         else:
             print()
-            print_warning("Invalid option. Please choose 1, 2, 3, 4, 5, 6, 7, 8 or 9.")
+            print_warning("Invalid option. Please choose 1, 2, 3, 4, 5, 6, 7 or 8.")
 
         input("\nPress Enter to continue...")
