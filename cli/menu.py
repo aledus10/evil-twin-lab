@@ -9,8 +9,8 @@ from core.network import get_basic_network_info, get_network_interfaces
 from core.system import get_project_status, get_python_info
 from core.wifi import get_wireless_interfaces
 from core.wifi_inventory import get_wireless_inventory
+from core.wifi_scan import scan_wifi_networks
 from core.wifi_lab import (
-    scan_wifi_networks,
     set_managed_mode,
     set_monitor_mode,
 )
@@ -18,16 +18,34 @@ from core.wifi_lab import (
 
 console = Console()
 
+# Centralized Rich theme: red carries the tool identity and danger states;
+# green is reserved for confirmed/active states.
+PRIMARY = "bold red"
+PRIMARY_BORDER = "red"
+SUCCESS = "bold bright_green"
+WARNING = "bold yellow"
+ERROR = "bold bright_red"
+TEXT = "white"
+MUTED = "grey70"
+
+SECTION = PRIMARY
+TABLE_HEADER = PRIMARY
+OPTION_NUMBER = PRIMARY
+EXIT_ACTION = ERROR
+LAB_ACTION = SUCCESS
+INTERFACE_NAME = "bold white"
+UNKNOWN = WARNING
+
 
 def print_banner(title, subtitle):
     content = Text(justify="center")
-    content.append(f"{title.upper()}\n", style="bold white")
-    content.append(subtitle, style="bright_cyan")
+    content.append(f"{title.upper()}\n", style=PRIMARY)
+    content.append(subtitle, style=MUTED)
     console.print()
     console.print(
         Panel(
             content,
-            border_style="bright_cyan",
+            border_style=PRIMARY_BORDER,
             box=box.DOUBLE,
             padding=(1, 6),
             width=64,
@@ -36,19 +54,35 @@ def print_banner(title, subtitle):
 
 
 def print_success(text):
-    console.print(text, style="green")
+    console.print(text, style=SUCCESS)
 
 
 def print_warning(text):
-    console.print(text, style="yellow")
+    console.print(text, style=WARNING)
 
 
 def print_error(text):
-    console.print(text, style="red")
+    console.print(text, style=ERROR)
 
 
 def print_info(text):
-    console.print(text, style="cyan")
+    console.print(text, style=MUTED)
+
+
+def print_section(text):
+    console.print(text, style=SECTION)
+
+
+def print_label_value(label, value, value_style=TEXT):
+    line = Text()
+    line.append(label, style=MUTED)
+    line.append(str(value), style=value_style)
+    console.print(line)
+
+
+def print_unknown_label_value(label, value):
+    value_style = UNKNOWN if value in (None, "", "N/A") else TEXT
+    print_label_value(label, value or "N/A", value_style)
 
 
 def print_header():
@@ -73,18 +107,26 @@ def print_menu():
 def print_options_table(title, options):
     table = Table(
         title=title,
-        title_style="bold cyan",
+        title_style=TABLE_HEADER,
         box=box.ROUNDED,
-        border_style="cyan",
+        border_style=PRIMARY_BORDER,
         show_header=False,
         padding=(0, 2),
     )
-    table.add_column("Option", justify="right", style="bold cyan", no_wrap=True)
-    table.add_column("Action", style="white")
+    table.add_column("Option", justify="right", no_wrap=True)
+    table.add_column("Action")
 
     for number, option in enumerate(options, start=1):
-        style = "yellow" if option == "Exit" else "white"
-        table.add_row(str(number), option, style=style)
+        action_style = TEXT
+        if option in ("Exit", "Back"):
+            action_style = EXIT_ACTION
+        elif option == "WiFi lab controls":
+            action_style = LAB_ACTION
+
+        table.add_row(
+            Text(str(number), style=OPTION_NUMBER),
+            Text(option, style=action_style),
+        )
 
     console.print()
     console.print(table)
@@ -94,7 +136,7 @@ def print_options_table(title, options):
 def print_step_results(results):
     for result in results:
         print()
-        print_info(f"Command: {' '.join(result['command'])}")
+        print_label_value("Command: ", " ".join(result["command"]), MUTED)
 
         if result["return_code"] == 0:
             print_success(f"Return code: {result['return_code']}")
@@ -102,7 +144,7 @@ def print_step_results(results):
             print_error(f"Return code: {result['return_code']}")
 
         if result["stdout"]:
-            print(result["stdout"])
+            console.print(result["stdout"], style=TEXT)
 
         if result["stderr"]:
             print_error("Errors:")
@@ -111,9 +153,9 @@ def print_step_results(results):
 
 def print_command_result(title, result):
     print()
-    print_info(title)
-    print_info("-" * len(title))
-    print_info(f"Command: {' '.join(result['command'])}")
+    print_section(title)
+    print_section("-" * len(title))
+    print_label_value("Command: ", " ".join(result["command"]), MUTED)
 
     if result["return_code"] == 0:
         print_success(f"Return code: {result['return_code']}")
@@ -122,7 +164,7 @@ def print_command_result(title, result):
 
     if result["stdout"]:
         print()
-        print(result["stdout"])
+        console.print(result["stdout"], style=TEXT)
 
     if result["stderr"]:
         print()
@@ -130,44 +172,117 @@ def print_command_result(title, result):
         print_error(result["stderr"])
 
 
+def get_signal_style(signal):
+    if signal is None:
+        return MUTED
+    if signal >= -50:
+        return SUCCESS
+    if signal >= -70:
+        return WARNING
+    return ERROR
+
+
+def get_security_style(security):
+    if security == "Open":
+        return ERROR
+    if "WPA2" in security or "WPA3" in security:
+        return SUCCESS
+    if security == "Encrypted":
+        return WARNING
+    return TEXT
+
+
+def format_scan_value(value, suffix=""):
+    if value is None:
+        return "N/A"
+    return f"{value:g}{suffix}" if isinstance(value, float) else f"{value}{suffix}"
+
+
+def print_wifi_scan_results(result):
+    if result["return_code"] != 0:
+        print_error("WiFi scan failed.")
+        print_error(f"Return code: {result['return_code']}")
+        if result["stderr"]:
+            print_error(result["stderr"])
+        return
+
+    networks = result["networks"]
+    if not networks:
+        print_warning("No WiFi networks detected.")
+        return
+
+    table = Table(
+        title="Nearby WiFi Networks",
+        title_style=TABLE_HEADER,
+        box=box.HEAVY_HEAD,
+        border_style=PRIMARY_BORDER,
+        header_style=TABLE_HEADER,
+        pad_edge=False,
+    )
+    table.add_column("#", justify="right", style=OPTION_NUMBER, no_wrap=True)
+    table.add_column("SSID", max_width=24, overflow="ellipsis")
+    table.add_column("BSSID", style=MUTED, no_wrap=True)
+    table.add_column("Ch", justify="right", no_wrap=True)
+    table.add_column("Band", style=MUTED, no_wrap=True)
+    table.add_column("Signal", justify="right", no_wrap=True)
+    table.add_column("Security", no_wrap=True)
+
+    for index, network in enumerate(networks, start=1):
+        ssid_style = WARNING if network["is_hidden"] else TEXT
+        ssid = network["ssid"] if network["ssid"] is not None else "N/A"
+        signal = network["signal"]
+        security = network["security"]
+        table.add_row(
+            str(index),
+            Text(ssid, style=ssid_style),
+            network["bssid"] or "N/A",
+            format_scan_value(network["channel"]),
+            network["band"] or "N/A",
+            Text(format_scan_value(signal, " dBm"), style=get_signal_style(signal)),
+            Text(security or "N/A", style=get_security_style(security)),
+        )
+
+    console.print(table)
+
+
 def show_project_status():
     status = get_project_status()
 
     print()
-    print_info("Project status")
-    print_info("--------------")
-    print(f"Project: {status['project']}")
-    print(f"Status:  {status['status']}")
-    print(f"Version: {status['version']}")
+    print_section("Project status")
+    print_section("--------------")
+    print_label_value("Project: ", status["project"])
+    print_label_value("Status:  ", status["status"])
+    print_label_value("Version: ", status["version"])
 
 
 def show_python_info():
     info = get_python_info()
 
     print()
-    print_info("Python/system info")
-    print_info("------------------")
-    print(f"Python version:   {info['python_version']}")
-    print(f"Platform:         {info['platform']}")
-    print(f"Platform release: {info['platform_release']}")
-    print(f"Machine:          {info['machine']}")
+    print_section("Python/system info")
+    print_section("------------------")
+    print_label_value("Python version:   ", info["python_version"])
+    print_label_value("Platform:         ", info["platform"])
+    print_label_value("Platform release: ", info["platform_release"])
+    print_label_value("Machine:          ", info["machine"])
 
 
 def show_basic_network_info():
     info = get_basic_network_info()
 
     print()
-    print_info("Basic network info")
-    print_info("------------------")
-    print(f"Hostname: {info['hostname']}")
+    print_section("Basic network info")
+    print_section("------------------")
+    print_label_value("Hostname: ", info["hostname"])
 
 
 def show_network_interfaces():
     interfaces = get_network_interfaces()
 
     print()
-    print_info("Network interfaces")
-    print_info("------------------")
+    print_section("Network interfaces")
+    print_section("------------------")
 
     for interface in interfaces:
         status = "up" if interface["is_up"] else "down"
@@ -177,18 +292,19 @@ def show_network_interfaces():
             else "generic network interface"
         )
 
-        print_info(f"\nInterface: {interface['name']}")
-        print(f"  IPv4:      {interface['ipv4'] or 'N/A'}")
-        print(f"  IPv6:      {interface['ipv6'] or 'N/A'}")
-        print(f"  MAC:       {interface['mac'] or 'N/A'}")
+        print()
+        print_label_value("Interface: ", interface["name"], INTERFACE_NAME)
+        print_unknown_label_value("  IPv4:      ", interface["ipv4"])
+        print_unknown_label_value("  IPv6:      ", interface["ipv6"])
+        print_unknown_label_value("  MAC:       ", interface["mac"])
 
         if status == "up":
             print_success(f"  Status:    {status}")
         else:
             print_warning(f"  Status:    {status}")
 
-        print(f"  Type:      {interface_type}")
-        print(f"  Addresses: {interface['addresses_count']}")
+        print_label_value("  Type:      ", interface_type)
+        print_label_value("  Addresses: ", interface["addresses_count"])
 
 
 def show_linux_wifi_commands():
@@ -201,8 +317,8 @@ def show_wireless_interfaces():
     result = get_wireless_interfaces()
 
     print()
-    print_info("Wireless interfaces")
-    print_info("-------------------")
+    print_section("Wireless interfaces")
+    print_section("-------------------")
 
     if not result["success"]:
         print_error("Could not read wireless interfaces.")
@@ -214,20 +330,21 @@ def show_wireless_interfaces():
         return
 
     for interface in result["interfaces"]:
-        print_info(f"\nInterface: {interface['name']}")
-        print(f"  PHY:      {interface['phy'] or 'N/A'}")
-        print(f"  Type:     {interface['type'] or 'N/A'}")
-        print(f"  SSID:     {interface['ssid'] or 'N/A'}")
-        print(f"  Channel:  {interface['channel'] or 'N/A'}")
-        print(f"  TxPower:  {interface['txpower'] or 'N/A'}")
+        print()
+        print_label_value("Interface: ", interface["name"], INTERFACE_NAME)
+        print_unknown_label_value("  PHY:      ", interface["phy"])
+        print_unknown_label_value("  Type:     ", interface["type"])
+        print_unknown_label_value("  SSID:     ", interface["ssid"])
+        print_unknown_label_value("  Channel:  ", interface["channel"])
+        print_unknown_label_value("  TxPower:  ", interface["txpower"])
 
 
 def show_wireless_inventory():
     result = get_wireless_inventory()
 
     print()
-    print_info("Wireless inventory")
-    print_info("------------------")
+    print_section("Wireless inventory")
+    print_section("------------------")
 
     if not result["success"]:
         print_error("Could not build wireless inventory.")
@@ -239,24 +356,25 @@ def show_wireless_inventory():
         return
 
     for interface in result["interfaces"]:
-        print_info(f"\nInterface: {interface['name']}")
-        print(f"  PHY:       {interface['phy'] or 'N/A'}")
-        print(f"  Type:      {interface['type'] or 'N/A'}")
-        print(f"  SSID:      {interface['ssid'] or 'N/A'}")
-        print(f"  Driver:    {interface['driver'] or 'N/A'}")
-        print(f"  Bus:       {interface['bus'] or 'N/A'}")
-        print(f"  Vendor:    {interface['vendor'] or 'N/A'}")
-        print(f"  Model:     {interface['model'] or 'N/A'}")
-        print(f"  USB:       {'yes' if interface['is_usb'] else 'no'}")
+        print()
+        print_label_value("Interface: ", interface["name"], INTERFACE_NAME)
+        print_unknown_label_value("  PHY:       ", interface["phy"])
+        print_unknown_label_value("  Type:      ", interface["type"])
+        print_unknown_label_value("  SSID:      ", interface["ssid"])
+        print_unknown_label_value("  Driver:    ", interface["driver"])
+        print_unknown_label_value("  Bus:       ", interface["bus"])
+        print_unknown_label_value("  Vendor:    ", interface["vendor"])
+        print_unknown_label_value("  Model:     ", interface["model"])
+        print_label_value("  USB:       ", "yes" if interface["is_usb"] else "no")
 
         role = interface["role_hint"]
 
         if "recommended" in role:
             print_success(f"  Role:      {role}")
         elif "avoid" in role:
-            print_warning(f"  Role:      {role}")
+            print_error(f"  Role:      {role}")
         else:
-            print(f"  Role:      {role}")
+            print_label_value("  Role:      ", role)
 
 
 def choose_wireless_interface():
@@ -276,8 +394,8 @@ def choose_wireless_interface():
         return None
 
     print()
-    print_info("Available wireless interfaces")
-    print_info("-----------------------------")
+    print_section("Available wireless interfaces")
+    print_section("-----------------------------")
 
     for index, interface in enumerate(interfaces, start=1):
         name = interface["name"]
@@ -286,17 +404,17 @@ def choose_wireless_interface():
         model = interface["model"] or "unknown-model"
         role = interface["role_hint"]
 
-        print_info(f"{index}) {name}")
-        print(f"   Driver: {driver}")
-        print(f"   Bus:    {bus}")
-        print(f"   Model:  {model}")
+        print_label_value(f"{index}) ", name, INTERFACE_NAME)
+        print_label_value("   Driver: ", driver, UNKNOWN if driver == "unknown-driver" else MUTED)
+        print_label_value("   Bus:    ", bus, UNKNOWN if bus == "unknown-bus" else MUTED)
+        print_label_value("   Model:  ", model, UNKNOWN if model == "unknown-model" else MUTED)
 
         if "recommended" in role:
             print_success(f"   Role:   {role}")
         elif "avoid" in role:
-            print_warning(f"   Role:   {role}")
+            print_error(f"   Role:   {role}")
         else:
-            print(f"   Role:   {role}")
+            print_label_value("   Role:   ", role)
 
     selected = input("\nSelect interface: ").strip()
 
@@ -339,7 +457,7 @@ def show_wifi_lab_menu():
                 print()
                 print_info(f"Scanning nearby WiFi networks using {interface_name}...")
                 result = scan_wifi_networks(interface_name)
-                print_command_result("WiFi scan", result)
+                print_wifi_scan_results(result)
 
         elif option == "3":
             interface_name = choose_wireless_interface()

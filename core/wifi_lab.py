@@ -24,10 +24,6 @@ def get_wireless_interface_names():
     }
 
 
-def scan_wifi_networks(interface_name):
-    return run_command(["sudo", "iw", "dev", interface_name, "scan"])
-
-
 def set_interface_down(interface_name):
     return run_command(["sudo", "ip", "link", "set", interface_name, "down"])
 
