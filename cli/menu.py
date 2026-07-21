@@ -4,6 +4,7 @@ from rich.panel import Panel
 from rich.table import Table
 from rich.text import Text
 
+from config.settings import AppSettings
 from core.linux_commands import get_ip_link_output, get_iw_dev_output, get_lsusb_output
 from core.network import get_basic_network_info, get_network_interfaces
 from core.system import get_project_status, get_python_info
@@ -96,6 +97,7 @@ def print_menu():
         "Show network interfaces",
         "Show Linux WiFi commands",
         "Show wireless inventory",
+        "Show application settings",
         "WiFi lab controls",
         "Exit",
     )
@@ -350,6 +352,62 @@ def show_wireless_inventory():
         else:
             print_label_value("  Role:      ", role)
 
+def show_application_settings(settings: AppSettings) -> None:
+    """Display the active validated application settings."""
+
+    print()
+    print_section("Application settings")
+    print_section("--------------------")
+
+    print_label_value(
+        "Lab interface:         ",
+        settings.lab_interface,
+        SUCCESS,
+    )
+    print_label_value(
+        "Protected interface:   ",
+        settings.protected_interface,
+        ERROR,
+    )
+    print_label_value(
+        "Dashboard:             ",
+        f"{settings.dashboard_host}:{settings.dashboard_port}",
+    )
+    print_label_value(
+        "Log level:             ",
+        settings.log_level,
+    )
+    print_label_value(
+        "DHCP subnet:           ",
+        settings.dhcp_subnet,
+    )
+    print_label_value(
+        "DHCP range:            ",
+        f"{settings.dhcp_start} - {settings.dhcp_end}",
+    )
+    print_label_value(
+        "Gateway:               ",
+        settings.gateway_ip,
+    )
+
+    if settings.target_profile is None:
+        print_label_value(
+            "Selected target:       ",
+            "None",
+            WARNING,
+        )
+    else:
+        target_name = (
+            settings.target_profile.get("ssid")
+            or settings.target_profile.get("bssid")
+            or "Configured target"
+        )
+
+        print_label_value(
+            "Selected target:       ",
+            target_name,
+            SUCCESS,
+        )
 
 def choose_wireless_interface():
     result = get_wireless_inventory()
@@ -405,7 +463,7 @@ def choose_wireless_interface():
     return interfaces[selected_index - 1]["name"]
 
 
-def show_wifi_lab_menu():
+def show_wifi_lab_menu(settings: AppSettings) -> None:
     while True:
         print_banner("WiFi Lab Controls", "Scan | Monitor | Restore")
         print_options_table(
@@ -432,10 +490,15 @@ def show_wifi_lab_menu():
         elif option == "2":
             interface_name = choose_wireless_interface()
 
-            if interface_name == "wlan0":
+            if interface_name == settings.protected_interface:
                 print()
-                print_warning("Refusing to change wlan0 because it may be your SSH connection.")
-                print_warning("Use the external adapter, usually wlan1.")
+                print_warning(
+                    f"Refusing to change {interface_name} because it is configured "
+                    "as the protected network interface."
+                )
+                print_warning(
+                    f"Use the configured lab interface: {settings.lab_interface}."
+                )
                 continue
 
             if interface_name:
@@ -447,29 +510,35 @@ def show_wifi_lab_menu():
         elif option == "3":
             interface_name = choose_wireless_interface()
 
+            if interface_name == settings.protected_interface:
+                print()
+                print_warning(
+                    f"Refusing to modify {interface_name} because it is configured "
+                    "as the protected network interface."
+                    )
+                continue
+
             if interface_name:
                 print()
                 print_info(f"Restoring managed mode on {interface_name}...")
                 results = set_managed_mode(interface_name)
                 print_step_results(results)
 
-        elif option == "4":
-            break
+            elif option == "4":
+                    break
 
-        else:
-            print()
-            print_warning("Invalid option. Please choose 1, 2, 3 or 4.")
+            else:
+                    print()
+                    print_warning("Invalid option. Please choose 1, 2, 3 or 4.")
 
-        input("\nPress Enter to continue...")
+            input("\nPress Enter to continue...")
 
 
-def run_menu():
+def run_menu(settings: AppSettings) -> None:
     while True:
         print_header()
         print_menu()
-
         option = input("Select an option: ").strip()
-
         if option == "1":
             show_project_status()
         elif option == "2":
@@ -483,13 +552,16 @@ def run_menu():
         elif option == "6":
             show_wireless_inventory()
         elif option == "7":
-            show_wifi_lab_menu()
+            show_application_settings(settings)
         elif option == "8":
+            show_wifi_lab_menu(settings)
+        elif option == "9":
             print()
             print_success("Exiting Evil Twin Lab. Bye!")
             break
         else:
             print()
-            print_warning("Invalid option. Please choose 1, 2, 3, 4, 5, 6, 7 or 8.")
-
+            print_warning(
+                "Invalid option. Please choose 1, 2, 3, 4, 5, 6, 7, 8 or 9."
+            )
         input("\nPress Enter to continue...")

@@ -20,7 +20,7 @@ def main() -> None:
             settings.protected_interface,
         )
 
-        run_menu()
+        run_menu(settings)
 
     except SettingsError as exc:
         logger.critical(
