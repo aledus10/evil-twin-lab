@@ -23,6 +23,19 @@ from core.target_profile import (
     TargetProfileError,
     build_target_profile_from_scan,
 )
+from rich.syntax import Syntax
+from rich import box
+from rich.console import Console
+from rich.panel import Panel
+from rich.syntax import Syntax
+from rich.table import Table
+from rich.text import Text
+from core.hostapd_config import (
+    HOSTAPD_CONFIG_PATH,
+    HostapdConfigError,
+    save_hostapd_config,
+)
+
 
 console = Console()
 
@@ -360,7 +373,7 @@ def show_wireless_inventory():
         else:
             print_label_value("  Role:      ", role)
 
-def show_lab_settings(settings: AppSettings) -> None:
+def show_lab_configuration(settings: AppSettings) -> None:
     """Display the active validated application settings."""
 
     print()
@@ -396,6 +409,10 @@ def show_lab_settings(settings: AppSettings) -> None:
     print_label_value(
         "Gateway:               ",
         settings.gateway_ip,
+    )
+    print_label_value(
+        "Country code:          ",
+        settings.country_code,
     )
 
     if settings.target_profile is None:
@@ -588,36 +605,182 @@ def clear_selected_target(
     print_success("Selected target cleared.")
     return updated_settings
 
+def show_generated_hostapd_config() -> None:
+    """Display the currently generated hostapd configuration."""
+
+    if not HOSTAPD_CONFIG_PATH.exists():
+        print()
+        print_warning(
+            "No hostapd configuration has been generated yet."
+        )
+        return
+
+    try:
+        config_text = HOSTAPD_CONFIG_PATH.read_text(
+            encoding="utf-8"
+        )
+    except OSError as exc:
+        print()
+        print_error(
+            f"Could not read the hostapd configuration: {exc}"
+        )
+        return
+
+    print()
+    print_section("Generated hostapd configuration")
+    print_section("-------------------------------")
+
+    syntax = Syntax(
+        config_text,
+        "ini",
+        theme="ansi_dark",
+        line_numbers=False,
+        word_wrap=True,
+    )
+
+    console.print(
+        Panel(
+            syntax,
+            title=str(HOSTAPD_CONFIG_PATH),
+            border_style=PRIMARY_BORDER,
+        )
+    )
+
+
+def show_generated_hostapd_config() -> None:
+    """Display the currently generated hostapd configuration."""
+
+    if not HOSTAPD_CONFIG_PATH.exists():
+        print()
+        print_warning(
+            "No hostapd configuration has been generated yet."
+        )
+        return
+
+    try:
+        config_text = HOSTAPD_CONFIG_PATH.read_text(
+            encoding="utf-8"
+        )
+    except OSError as exc:
+        print()
+        print_error(
+            f"Could not read the hostapd configuration: {exc}"
+        )
+        return
+
+    print()
+    print_section("Generated hostapd configuration")
+    print_section("-------------------------------")
+
+    syntax = Syntax(
+        config_text,
+        "ini",
+        theme="ansi_dark",
+        line_numbers=False,
+        word_wrap=True,
+    )
+
+    console.print(
+        Panel(
+            syntax,
+            title=str(HOSTAPD_CONFIG_PATH),
+            border_style=PRIMARY_BORDER,
+        )
+    )
+
+
+def generate_lab_ap_config(
+    settings: AppSettings,
+) -> None:
+    """Generate an open AP configuration using the safe lab SSID."""
+
+    if settings.target_profile is None:
+        print()
+        print_warning(
+            "Select a target network first so its channel and band "
+            "can be used."
+        )
+        return
+
+    if settings.lab_interface == settings.protected_interface:
+        print()
+        print_error(
+            "The lab interface cannot also be the protected interface."
+        )
+        return
+
+    try:
+        output_path = save_hostapd_config(
+            settings,
+            use_target_ssid=False,
+        )
+    except HostapdConfigError as exc:
+        print()
+        print_error(
+            f"Could not generate hostapd configuration: {exc}"
+        )
+        return
+
+    print()
+    print_success(
+        f"hostapd configuration generated: {output_path}"
+    )
+    print_info(
+        "The configuration uses the laboratory SSID EvilTwin-Lab."
+    )
+
+    show_generated_hostapd_config()
+
+    print()
+    print_success(
+        f"hostapd configuration generated: {output_path}"
+    )
+    print_info(
+        "The configuration uses the laboratory SSID EvilTwin-Lab."
+    )
+
+    show_generated_hostapd_config()
+
 def show_wifi_lab_menu(
-    settings: AppSettings,) -> AppSettings:
+    settings: AppSettings,
+) -> AppSettings:
     """Run the WiFi laboratory submenu."""
+
     while True:
         print_banner(
             "WiFi Lab Controls",
-            "Scan | Target | Monitor | Restore",
+            "Scan | Target | AP Config | Monitor | Restore",
         )
+
         print_options_table(
             "Lab Actions",
             (
                 "Scan nearby WiFi networks",
                 "Show selected target",
                 "Clear selected target",
+                "Generate lab AP configuration",
+                "Show generated AP configuration",
                 "Enable monitor mode",
                 "Restore managed mode",
                 "Back",
             ),
         )
+
         option = input("Select an option: ").strip()
+
         if option == "1":
             interface_name = choose_wireless_interface()
+
             if interface_name:
                 print()
                 print_info(
                     f"Scanning nearby WiFi networks using "
                     f"{interface_name}..."
                 )
+
                 result = scan_wifi_networks(interface_name)
                 print_wifi_scan_results(result)
+
                 if (
                     result["return_code"] == 0
                     and result["networks"]
@@ -625,17 +788,34 @@ def show_wifi_lab_menu(
                     target_profile = choose_target_from_scan(
                         result["networks"]
                     )
+
                     if target_profile is not None:
                         settings = save_selected_target(
                             settings,
                             target_profile,
                         )
+
         elif option == "2":
-            print_target_profile(settings.target_profile)
+            print_target_profile(
+                settings.target_profile
+            )
+
         elif option == "3":
-            settings = clear_selected_target(settings)
+            settings = clear_selected_target(
+                settings
+            )
+
         elif option == "4":
+            generate_lab_ap_config(
+                settings
+            )
+
+        elif option == "5":
+            show_generated_hostapd_config()
+
+        elif option == "6":
             interface_name = choose_wireless_interface()
+
             if interface_name == settings.protected_interface:
                 print()
                 print_warning(
@@ -646,36 +826,54 @@ def show_wifi_lab_menu(
                     f"Use the configured lab interface: "
                     f"{settings.lab_interface}."
                 )
+
             elif interface_name:
                 print()
                 print_info(
-                    f"Enabling monitor mode on {interface_name}..."
+                    f"Enabling monitor mode on "
+                    f"{interface_name}..."
                 )
-                results = set_monitor_mode(interface_name)
+
+                results = set_monitor_mode(
+                    interface_name
+                )
                 print_step_results(results)
-        elif option == "5":
+
+        elif option == "7":
             interface_name = choose_wireless_interface()
+
             if interface_name == settings.protected_interface:
                 print()
                 print_warning(
                     f"Refusing to modify {interface_name} because "
                     "it is configured as the protected interface."
                 )
+                print_warning(
+                    f"Use the configured lab interface: "
+                    f"{settings.lab_interface}."
+                )
+
             elif interface_name:
                 print()
                 print_info(
                     f"Restoring managed mode on "
                     f"{interface_name}..."
                 )
-                results = set_managed_mode(interface_name)
+
+                results = set_managed_mode(
+                    interface_name
+                )
                 print_step_results(results)
-        elif option == "6":
+
+        elif option == "8":
             return settings
+
         else:
             print()
             print_warning(
-                "Invalid option. Please choose 1, 2, 3, 4, 5 or 6."
+                "Invalid option. Please choose a number from 1 to 8."
             )
+
         input("\nPress Enter to continue...")
 
 def run_menu(settings: AppSettings) -> None:
