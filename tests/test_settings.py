@@ -17,6 +17,7 @@ from config.settings import (
 VALID_SETTINGS = {
     "lab_interface": "wlan1",
     "protected_interface": "wlan0",
+    "country_code": "ES",
     "dashboard_host": "127.0.0.1",
     "dashboard_port": 5000,
     "log_level": "INFO",

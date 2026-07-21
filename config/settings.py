@@ -46,6 +46,7 @@ class AppSettings:
 
     lab_interface: str
     protected_interface: str
+    country_code: str
     dashboard_host: str
     dashboard_port: int
     log_level: str
@@ -239,11 +240,28 @@ def _validate_network_settings(
         str(gateway),
     )
 
+def _validate_country_code(value: Any) -> str:
+    """Validate and normalize an ISO-style two-letter country code."""
+
+    if not isinstance(value, str):
+        raise SettingsValidationError(
+            "country_code must be a string"
+        )
+
+    country_code = value.strip().upper()
+
+    if len(country_code) != 2 or not country_code.isalpha():
+        raise SettingsValidationError(
+            "country_code must contain exactly two letters"
+        )
+
+    return country_code
 
 def validate_settings(data: dict[str, Any]) -> AppSettings:
     """Validate raw configuration and return an AppSettings object."""
 
     required_fields = {
+        "country_code",
         "lab_interface",
         "protected_interface",
         "dashboard_host",
@@ -298,6 +316,7 @@ def validate_settings(data: dict[str, Any]) -> AppSettings:
     )
 
     return AppSettings(
+        country_code=_validate_country_code(data["country_code"]),
         lab_interface=lab_interface,
         protected_interface=protected_interface,
         dashboard_host=_validate_host(data["dashboard_host"]),

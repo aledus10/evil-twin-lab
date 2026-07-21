@@ -38,3 +38,7 @@ htmlcov/
 # Runtime configuration
 config/runtime.json
 config/runtime.json.tmp
+
+# Generated service configuration
+config/generated/*
+!config/generated/.gitkeep

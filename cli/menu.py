@@ -14,7 +14,15 @@ from core.wifi_lab import (
     set_managed_mode,
     set_monitor_mode,
 )
-
+from config.settings import (
+    AppSettings,
+    save_runtime_settings,
+    update_settings,
+)
+from core.target_profile import (
+    TargetProfileError,
+    build_target_profile_from_scan,
+)
 
 console = Console()
 
@@ -97,7 +105,7 @@ def print_menu():
         "Show network interfaces",
         "Show Linux WiFi commands",
         "Show wireless inventory",
-        "Show application settings",
+        "Show lab configuration",
         "WiFi lab controls",
         "Exit",
     )
@@ -352,11 +360,11 @@ def show_wireless_inventory():
         else:
             print_label_value("  Role:      ", role)
 
-def show_application_settings(settings: AppSettings) -> None:
+def show_lab_settings(settings: AppSettings) -> None:
     """Display the active validated application settings."""
 
     print()
-    print_section("Application settings")
+    print_section("Lab configuration")
     print_section("--------------------")
 
     print_label_value(
@@ -463,76 +471,212 @@ def choose_wireless_interface():
     return interfaces[selected_index - 1]["name"]
 
 
-def show_wifi_lab_menu(settings: AppSettings) -> None:
+def print_target_profile(target_profile) -> None:
+    """Display a stored WiFi target profile."""
+
+    if target_profile is None:
+        print()
+        print_warning("No target network is currently selected.")
+        return
+
+    print()
+    print_section("Selected target")
+    print_section("---------------")
+
+    print_label_value(
+        "SSID:       ",
+        target_profile.get("ssid", "N/A"),
+        SUCCESS,
+    )
+    print_label_value(
+        "BSSID:      ",
+        target_profile.get("bssid", "N/A"),
+    )
+    print_label_value(
+        "Channel:    ",
+        target_profile.get("channel", "N/A"),
+    )
+    print_label_value(
+        "Frequency:  ",
+        (
+            f"{target_profile['frequency']} MHz"
+            if target_profile.get("frequency") is not None
+            else "N/A"
+        ),
+    )
+    print_label_value(
+        "Band:       ",
+        target_profile.get("band", "Unknown"),
+    )
+    print_label_value(
+        "Signal:     ",
+        (
+            f"{target_profile['signal']:g} dBm"
+            if target_profile.get("signal") is not None
+            else "N/A"
+        ),
+    )
+    print_label_value(
+        "Security:   ",
+        target_profile.get("security", "Unknown"),
+    )
+    print_label_value(
+        "Interface:  ",
+        target_profile.get("interface", "N/A"),
+    )
+    print_label_value(
+        "Source:     ",
+        target_profile.get("source", "Unknown"),
+        MUTED,
+    )
+
+
+def choose_target_from_scan(networks):
+    """Ask the user to choose one network from the scan results."""
+    selected = input(
+        "\nSelect target network number "
+        "(press Enter to skip): "
+    ).strip()
+    if selected == "":
+        print_info("Target selection skipped.")
+        return None
+    if not selected.isdigit():
+        print_warning("Invalid target selection.")
+        return None
+    selected_index = int(selected)
+    if selected_index < 1 or selected_index > len(networks):
+        print_warning("Target number is outside the displayed range.")
+        return None
+    selected_network = networks[selected_index - 1]
+    try:
+        return build_target_profile_from_scan(selected_network)
+    except TargetProfileError as exc:
+        print_warning(f"Could not select target: {exc}")
+        return None
+
+
+def save_selected_target(
+    settings: AppSettings,
+    target_profile,) -> AppSettings:
+    """Update and persist the selected target."""
+    updated_settings = update_settings(
+        settings,
+        target_profile=target_profile,
+    )
+    save_runtime_settings(updated_settings)
+    print()
+    print_success(
+        f"Target selected: {target_profile['ssid']}"
+    )
+    print_target_profile(target_profile)
+    return updated_settings
+
+
+def clear_selected_target(
+    settings: AppSettings,) -> AppSettings:
+    """Remove and persist the current target profile."""
+    if settings.target_profile is None:
+        print()
+        print_warning("There is no selected target to clear.")
+        return settings
+    updated_settings = update_settings(
+        settings,
+        target_profile=None,
+    )
+    save_runtime_settings(updated_settings)
+    print()
+    print_success("Selected target cleared.")
+    return updated_settings
+
+def show_wifi_lab_menu(
+    settings: AppSettings,) -> AppSettings:
+    """Run the WiFi laboratory submenu."""
     while True:
-        print_banner("WiFi Lab Controls", "Scan | Monitor | Restore")
+        print_banner(
+            "WiFi Lab Controls",
+            "Scan | Target | Monitor | Restore",
+        )
         print_options_table(
             "Lab Actions",
             (
                 "Scan nearby WiFi networks",
+                "Show selected target",
+                "Clear selected target",
                 "Enable monitor mode",
                 "Restore managed mode",
                 "Back",
             ),
         )
-
         option = input("Select an option: ").strip()
-
         if option == "1":
             interface_name = choose_wireless_interface()
-
             if interface_name:
                 print()
-                print_info(f"Scanning nearby WiFi networks using {interface_name}...")
+                print_info(
+                    f"Scanning nearby WiFi networks using "
+                    f"{interface_name}..."
+                )
                 result = scan_wifi_networks(interface_name)
                 print_wifi_scan_results(result)
-
+                if (
+                    result["return_code"] == 0
+                    and result["networks"]
+                ):
+                    target_profile = choose_target_from_scan(
+                        result["networks"]
+                    )
+                    if target_profile is not None:
+                        settings = save_selected_target(
+                            settings,
+                            target_profile,
+                        )
         elif option == "2":
+            print_target_profile(settings.target_profile)
+        elif option == "3":
+            settings = clear_selected_target(settings)
+        elif option == "4":
             interface_name = choose_wireless_interface()
-
             if interface_name == settings.protected_interface:
                 print()
                 print_warning(
-                    f"Refusing to change {interface_name} because it is configured "
-                    "as the protected network interface."
+                    f"Refusing to modify {interface_name} because "
+                    "it is configured as the protected interface."
                 )
                 print_warning(
-                    f"Use the configured lab interface: {settings.lab_interface}."
+                    f"Use the configured lab interface: "
+                    f"{settings.lab_interface}."
                 )
-                continue
-
-            if interface_name:
+            elif interface_name:
                 print()
-                print_info(f"Enabling monitor mode on {interface_name}...")
+                print_info(
+                    f"Enabling monitor mode on {interface_name}..."
+                )
                 results = set_monitor_mode(interface_name)
                 print_step_results(results)
-
-        elif option == "3":
+        elif option == "5":
             interface_name = choose_wireless_interface()
-
             if interface_name == settings.protected_interface:
                 print()
                 print_warning(
-                    f"Refusing to modify {interface_name} because it is configured "
-                    "as the protected network interface."
-                    )
-                continue
-
-            if interface_name:
+                    f"Refusing to modify {interface_name} because "
+                    "it is configured as the protected interface."
+                )
+            elif interface_name:
                 print()
-                print_info(f"Restoring managed mode on {interface_name}...")
+                print_info(
+                    f"Restoring managed mode on "
+                    f"{interface_name}..."
+                )
                 results = set_managed_mode(interface_name)
                 print_step_results(results)
-
-            elif option == "4":
-                    break
-
-            else:
-                    print()
-                    print_warning("Invalid option. Please choose 1, 2, 3 or 4.")
-
-            input("\nPress Enter to continue...")
-
+        elif option == "6":
+            return settings
+        else:
+            print()
+            print_warning(
+                "Invalid option. Please choose 1, 2, 3, 4, 5 or 6."
+            )
+        input("\nPress Enter to continue...")
 
 def run_menu(settings: AppSettings) -> None:
     while True:
@@ -552,9 +696,9 @@ def run_menu(settings: AppSettings) -> None:
         elif option == "6":
             show_wireless_inventory()
         elif option == "7":
-            show_application_settings(settings)
+            show_lab_settings(settings)
         elif option == "8":
-            show_wifi_lab_menu(settings)
+            settings = show_wifi_lab_menu(settings)
         elif option == "9":
             print()
             print_success("Exiting Evil Twin Lab. Bye!")
