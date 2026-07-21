@@ -1,0 +1,12 @@
+{
+  "lab_interface": "wlan1",
+  "protected_interface": "wlan0",
+  "dashboard_host": "127.0.0.1",
+  "dashboard_port": 5000,
+  "log_level": "INFO",
+  "dhcp_subnet": "10.20.0.0/24",
+  "dhcp_start": "10.20.0.10",
+  "dhcp_end": "10.20.0.100",
+  "gateway_ip": "10.20.0.1",
+  "target_profile": null
+}

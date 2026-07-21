@@ -34,3 +34,7 @@ Thumbs.db
 # Coverage
 .coverage
 htmlcov/
+
+# Runtime configuration
+config/runtime.json
+config/runtime.json.tmp
